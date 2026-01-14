@@ -1,0 +1,11 @@
+# Runtime data
+rebuild-snapshots/
+system-rebuild/
+
+# Build artifacts
+*.AppImage
+*.deb
+*.tar.gz
+
+# Temporary
+*.log

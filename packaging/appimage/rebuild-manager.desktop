@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Ubuntu Rebuild Manager
+Exec=rebuild-manager
+Icon=rebuild-manager
+Terminal=true
+Categories=Utility;System;
