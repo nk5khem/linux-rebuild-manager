@@ -231,7 +231,7 @@ preview_restore() {
   echo
   echo "===== Flatpak changes ====="
   if command -v flatpak >/dev/null; then
-    flatpak list --app | awk '{print $1}' | sort > "$TMP/current-flat.txt"
+    flatpak list --app --columns=application | sort > "$TMP/current-flat.txt"
     awk '{print $1}' "$TMP/system-rebuild/flatpak-apps.txt" | sort > "$TMP/snap-flat.txt"
     diff "$TMP/current-flat.txt" "$TMP/snap-flat.txt" || true
   fi
