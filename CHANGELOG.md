@@ -1,3 +1,6 @@
+## v1.0.2
+- Fix Flatpak restore using application IDs instead of display names
+
 ## v1.0.1
 - Added Zenity-based GUI (no terminal required)
 - Guaranteed GNOME application menu entry
