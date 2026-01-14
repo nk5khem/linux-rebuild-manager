@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Linux Rebuild Manager
+Comment=Terminal-based system rebuild and migration utility
+Exec=rebuild-manager
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Utility;System;
+StartupNotify=false

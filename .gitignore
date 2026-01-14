@@ -1,11 +1,3 @@
-# Runtime data
-rebuild-snapshots/
-system-rebuild/
-
-# Build artifacts
-*.AppImage
+build-deb/
 *.deb
-*.tar.gz
-
-# Temporary
-*.log
+v1.0.0/
