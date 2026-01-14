@@ -91,7 +91,7 @@ create_snapshot() {
 
     if $HAS_FLATPAK; then
         echo "Saving Flatpak apps..."
-        flatpak list --app > "$BASE_DIR/flatpak-apps.txt"
+        flatpak list --app --columns=application > "$BASE_DIR/flatpak-apps.txt"
     else
         echo "Skipping Flatpak apps (Flatpak not available)."
     fi
@@ -354,7 +354,7 @@ install_missing_flatpak() {
   CURRENT=$(flatpak list --app --columns=application)
   FOUND=false
 
-  while read -r APP _; do
+  while read -r APP; do
     if ! echo "$CURRENT" | grep -qx "$APP"; then
       FOUND=true
       echo "Installing Flatpak: $APP"
