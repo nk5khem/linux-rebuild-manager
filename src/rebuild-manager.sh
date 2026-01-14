@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# Load version
+VERSION="dev"
+if [[ -f "/usr/share/linux-rebuild-manager/VERSION" ]]; then
+    VERSION="$(cat /usr/share/linux-rebuild-manager/VERSION)"
+elif [[ -f "$(dirname "$0")/../VERSION" ]]; then
+    VERSION="$(cat "$(dirname "$0")/../VERSION")"
+fi
+if [[ "$1" == "--version" || "$1" == "-v" ]]; then
+    echo "linux-rebuild-manager version $VERSION"
+    exit 0
+fi
+
 BASE_DIR="$HOME/system-rebuild"
 SNAPSHOT_DIR="$HOME/rebuild-snapshots"
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
