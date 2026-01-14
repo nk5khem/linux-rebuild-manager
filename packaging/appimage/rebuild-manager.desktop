@@ -1,7 +1,10 @@
 [Desktop Entry]
-Type=Application
-Name=Ubuntu Rebuild Manager
-Exec=rebuild-manager
+Name=Rebuild Manager
+Comment=Linux rebuild snapshot manager
+Exec=rebuild-manager-gui
 Icon=rebuild-manager
-Terminal=true
+Terminal=false
+Type=Application
 Categories=Utility;System;
+Keywords=rebuild;system;backup;
+
