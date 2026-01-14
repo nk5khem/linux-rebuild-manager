@@ -1,8 +1,12 @@
 #!/bin/bash
+
 echo
 echo "Ubuntu Rebuild Manager installed successfully."
 echo
-echo "Run the tool using:"
+echo "You can launch the app from the application menu:"
+echo "  Rebuild Manager"
+echo
+echo "Or run from terminal:"
 echo "  rebuild-manager"
 echo
 echo "Snapshots will be stored in:"
@@ -11,3 +15,9 @@ echo
 echo "For help:"
 echo "  man rebuild-manager"
 echo
+
+# Refresh application database
+update-desktop-database >/dev/null 2>&1 || true
+
+exit 0
+
