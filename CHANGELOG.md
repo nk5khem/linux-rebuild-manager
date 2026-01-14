@@ -1,3 +1,9 @@
+## v1.0.1
+- Added Zenity-based GUI (no terminal required)
+- Guaranteed GNOME application menu entry
+- Snapshot file chooser support
+- CLI and GUI modes both supported
+
 # Changelog
 
 All notable changes to linux-rebuild-manager are documented in this file.
