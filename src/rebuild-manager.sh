@@ -18,6 +18,7 @@ if [[ "$1" == "--version" || "$1" == "-v" ]]; then
     echo "linux-rebuild-manager version $VERSION"
     exit 0
 fi
+notify_info "Linux Rebuild Manager v$VERSION ready."
 
 # -----------------------------
 # Detect Linux distribution
@@ -80,48 +81,87 @@ progress_gui() {
 }
 
 # -----------------------------
+# Helpers
+# -----------------------------
+pause() {
+    echo
+    read -rp "Press Enter to continue..."
+}
+
+# =============================
+# Phase 3A – Notification helpers  ← ADD HERE
+# =============================
+notify_info() {
+    MSG="$1"
+    if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+        zenity --info --title="Linux Rebuild Manager" --text="$MSG"
+    else
+        echo "[INFO] $MSG"
+    fi
+}
+
+notify_warn() {
+    MSG="$1"
+    if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+        zenity --warning --title="Linux Rebuild Manager" --text="$MSG"
+    else
+        echo "[WARNING] $MSG"
+    fi
+}
+
+notify_error() {
+    MSG="$1"
+    if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+        zenity --error --title="Linux Rebuild Manager" --text="$MSG"
+    else
+        echo "[ERROR] $MSG"
+    fi
+}
+
+
+# -----------------------------
 # Core functionality
 # -----------------------------
 create_snapshot() {
         progress_gui 5 "Preparing snapshot environment"
-        echo "Creating rebuild snapshot..."
+        notify_info "Creating rebuild snapshot..."
 
     rm -rf "$BASE_DIR"
     mkdir -p "$BASE_DIR"
 
     if $HAS_APT; then
         progress_gui 20 "Saving APT package list"
-        echo "Saving APT manual packages..."
+        notify_info "Saving APT manual packages..."
         apt-mark showmanual > "$BASE_DIR/apt-manual.txt"
     else
-        echo "Skipping APT packages (APT not available)."
+        notify_warn "Skipping APT packages (APT not available)."
     fi
 
     if $HAS_SNAP; then
         progress_gui 35 "Saving Snap package list"
-        echo "Saving Snap list..."
+        notify_info "Saving Snap list..."
         snap list > "$BASE_DIR/snap-list.txt"
     else
-        echo "Skipping Snap packages (Snap not available)."
+        notify_warn "Skipping Snap packages (Snap not available)."
     fi
 
     if $HAS_FLATPAK; then
         progress_gui 50 "Saving Flatpak applications"
-        echo "Saving Flatpak apps..."
+        notify_info "Saving Flatpak apps..."
         flatpak list --app --columns=application > "$BASE_DIR/flatpak-apps.txt"
     else
-        echo "Skipping Flatpak apps (Flatpak not available)."
+        notify_warn "Skipping Flatpak apps (Flatpak not available)."
     fi
 
     if $HAS_APT; then
-        echo "Saving APT sources and keys..."
+        notify_info "Saving APT sources and keys..."
         mkdir -p "$BASE_DIR/apt-sources"
         cp -r /etc/apt/sources.list* "$BASE_DIR/apt-sources/" 2>/dev/null
         cp -r /etc/apt/sources.list.d "$BASE_DIR/apt-sources/" 2>/dev/null
         cp -r /etc/apt/trusted.gpg.d "$BASE_DIR/apt-sources/" 2>/dev/null
     fi
 
-    echo "Saving user configs..."
+    notify_info "Saving user configs..."
     progress_gui 65 "Saving user configuration files"
     cp -r "$HOME/.config" "$BASE_DIR/config" 2>/dev/null
     cp -r "$HOME/.local/share" "$BASE_DIR/local-share" 2>/dev/null
@@ -131,7 +171,7 @@ create_snapshot() {
     tar -czf "$ARCHIVE" -C "$HOME" system-rebuild
 
     echo
-    echo "Snapshot created:"
+    notify_info "Snapshot created:"
     progress_gui 100 "Snapshot completed"
     echo "$ARCHIVE"
     pause
@@ -163,7 +203,7 @@ show_changes() {
     LAST_TWO=$(ls -t "$SNAPSHOT_DIR"/linux-rebuild-*.tar.gz 2>/dev/null | head -n 2)
 
     if [[ "$(echo "$LAST_TWO" | wc -l)" -lt 2 ]]; then
-        echo "Not enough snapshots to compare."
+        notify_info "Not enough snapshots to compare."
         pause
         return
     fi
@@ -191,7 +231,7 @@ show_changes() {
 }
 
 cleanup_snapshots() {
-    echo "Available snapshots:"
+    notify_info "Available snapshots:"
     ls -lh "$SNAPSHOT_DIR"
     echo
     read -rp "Keep how many latest snapshots? " KEEP
@@ -201,7 +241,7 @@ cleanup_snapshots() {
 }
 
 verify_snapshots() {
-    echo "Verifying snapshots..."
+    notify_info "Verifying snapshots..."
     for f in "$SNAPSHOT_DIR"/*.tar.gz; do
         echo "Checking $f"
         tar -tzf "$f" >/dev/null && echo "OK" || echo "CORRUPTED"
@@ -216,7 +256,7 @@ select_snapshot() {
   SNAP_DIR="$HOME/rebuild-snapshots"
 
   if [ ! -d "$SNAP_DIR" ]; then
-    echo "No rebuild archive directory found."
+    notify_info "No rebuild archive directory found."
     pause
     return 1
   fi
@@ -227,7 +267,7 @@ select_snapshot() {
       --filename="$SNAP_DIR/" \
       --file-filter="Rebuild archives (*.tar.gz) | *.tar.gz"
   else
-    echo "Available rebuild archives:"
+    notify_info "Available rebuild archives:"
     ls -1 "$SNAP_DIR"/*.tar.gz 2>/dev/null | nl
     echo
     read -rp "Enter archive number: " N
@@ -311,13 +351,13 @@ install_missing_apt() {
   tar -xzf "$SNAP" -C "$TMP"
 
   if ! command -v apt >/dev/null; then
-    echo "APT not available on this system."
+    notify_warn "APT not available on this system."
     rm -rf "$TMP"
     pause
     return
   fi
 
-  echo "Calculating missing APT packages..."
+  notify_info "Calculating missing APT packages..."
 
   apt-mark showmanual | sort > "$TMP/current-apt.txt"
   sort "$TMP/system-rebuild/apt-manual.txt" > "$TMP/snap-apt.txt"
@@ -325,13 +365,13 @@ install_missing_apt() {
   MISSING=$(comm -13 "$TMP/current-apt.txt" "$TMP/snap-apt.txt")
 
   if [ -z "$MISSING" ]; then
-    echo "No missing APT packages to install."
+    notify_info "No missing APT packages to install."
     rm -rf "$TMP"
     pause
     return
   fi
 
-  echo "The following packages will be installed:"
+  notify_info "The following packages will be installed:"
   echo "$MISSING"
   echo
 
@@ -345,12 +385,12 @@ install_missing_apt() {
     [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && rm -rf "$TMP" && return
   fi
 
-  echo "Installing missing APT packages..."
+  notify_info "Installing missing APT packages..."
   sudo apt update
   sudo apt install -y $MISSING
 
   rm -rf "$TMP"
-  echo "APT restore completed."
+  notify_info "APT restore completed."
   pause
 }
 
@@ -358,7 +398,7 @@ install_missing_flatpak() {
   SNAP="$1"
 
   if ! command -v flatpak >/dev/null; then
-    echo "Flatpak not available on this system."
+    notify_warn "Flatpak not available on this system."
     pause
     return
   fi
@@ -369,13 +409,13 @@ install_missing_flatpak() {
   SNAP_LIST="$TMP/system-rebuild/flatpak-apps.txt"
 
   if [ ! -f "$SNAP_LIST" ]; then
-    echo "No Flatpak data found in snapshot."
+    notify_info "No Flatpak data found in snapshot."
     rm -rf "$TMP"
     pause
     return
   fi
 
-  echo "Calculating missing Flatpak applications..."
+  notify_info "Calculating missing Flatpak applications..."
 
   CURRENT=$(flatpak list --app --columns=application)
   FOUND=false
@@ -402,7 +442,7 @@ install_missing_snap() {
   tar -xzf "$SNAP" -C "$TMP"
 
   if ! command -v snap >/dev/null; then
-    echo "Snap not available on this system."
+    notify_warn "Snap not available on this system."
     rm -rf "$TMP"
     pause
     return
@@ -411,13 +451,13 @@ install_missing_snap() {
   SNAP_FILE="$TMP/system-rebuild/snap-list.txt"
 
   if [ ! -f "$SNAP_FILE" ]; then
-    echo "No Snap data in snapshot."
+    notify_info "No Snap data in snapshot."
     rm -rf "$TMP"
     pause
     return
   fi
 
-  echo "Calculating missing Snap applications..."
+  notify_info "Calculating missing Snap applications..."
 
   snap list | awk 'NR>1 {print $1}' | sort > "$TMP/current-snap.txt"
   awk 'NR>1 {print $1}' "$SNAP_FILE" | sort > "$TMP/snap-snap.txt"
@@ -425,13 +465,13 @@ install_missing_snap() {
   MISSING=$(comm -13 "$TMP/current-snap.txt" "$TMP/snap-snap.txt")
 
   if [ -z "$MISSING" ]; then
-    echo "No missing Snap apps to install."
+    notify_info "No missing Snap apps to install."
     rm -rf "$TMP"
     pause
     return
   fi
 
-  echo "The following Snap apps will be installed:"
+  notify_info "The following Snap apps will be installed:"
   echo "$MISSING"
   echo
 
@@ -451,7 +491,7 @@ install_missing_snap() {
   done
 
   rm -rf "$TMP"
-  echo "Snap restore completed."
+  notify_info "Snap restore completed."
   pause
 }
 
@@ -471,7 +511,7 @@ restore_configs() {
   AVAILABLE=$(ls -1 "$CFG_SRC")
 
   if [ -z "$AVAILABLE" ]; then
-    echo "No config folders found in snapshot."
+    notify_info "No config folders found in snapshot."
     rm -rf "$TMP"
     pause
     return
@@ -488,7 +528,7 @@ restore_configs() {
       $(for f in $AVAILABLE; do echo FALSE "$f"; done) \
       --separator=" ")
   else
-    echo "Available config folders:"
+    notify_info "Available config folders:"
     echo "$AVAILABLE"
     read -rp "Enter folder names to restore (space separated): " SELECTED
   fi
@@ -498,7 +538,7 @@ restore_configs() {
   BACKUP="$HOME/.config-backup-$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$BACKUP"
 
-  echo "Backing up existing configs to:"
+  notify_info "Backing up existing configs to:"
   echo "$BACKUP"
 
   for cfg in $SELECTED; do
@@ -506,10 +546,15 @@ restore_configs() {
     cp -a "$CFG_SRC/$cfg" "$HOME/.config/"
   done
 
-  echo "Selected configs restored."
+  notify_info "Selected configs restored."
+  notify_info "Restore completed successfully."
+  notify_info "Applications and selected configurations have been restored."
+  notify_info "You may need to log out or restart for all changes to apply."
+
   rm -rf "$TMP"
   pause
 }
+
 
 
 #----------------------------

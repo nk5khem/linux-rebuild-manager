@@ -1,10 +1,10 @@
 [Desktop Entry]
 Name=Rebuild Manager
-Comment=Linux rebuild snapshot manager
+Comment=Migrate applications and configs to rebuild your Linux system
 Exec=rebuild-manager-gui
 Icon=rebuild-manager
 Terminal=false
 Type=Application
 Categories=Utility;System;
 Keywords=rebuild;system;backup;
-
+StartupNotify=true
