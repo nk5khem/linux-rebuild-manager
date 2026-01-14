@@ -192,6 +192,241 @@ verify_snapshots() {
 # -----------------------------
 # Main menu
 # -----------------------------
+select_snapshot() {
+  SNAP_DIR="$HOME/rebuild-snapshots"
+
+  if [ ! -d "$SNAP_DIR" ]; then
+    echo "No rebuild archive directory found."
+    pause
+    return 1
+  fi
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    zenity --file-selection \
+      --title="Select rebuild archive" \
+      --filename="$SNAP_DIR/" \
+      --file-filter="Rebuild archives (*.tar.gz) | *.tar.gz"
+  else
+    echo "Available rebuild archives:"
+    ls -1 "$SNAP_DIR"/*.tar.gz 2>/dev/null | nl
+    echo
+    read -rp "Enter archive number: " N
+    ls -1 "$SNAP_DIR"/*.tar.gz | sed -n "${N}p"
+  fi
+}
+
+preview_restore() {
+  SNAP="$1"
+  TMP=$(mktemp -d)
+
+  tar -xzf "$SNAP" -C "$TMP"
+
+  echo "===== APT changes ====="
+  if command -v apt >/dev/null; then
+    apt-mark showmanual | sort > "$TMP/current-apt.txt"
+    sort "$TMP/system-rebuild/apt-manual.txt" > "$TMP/snap-apt.txt"
+    diff "$TMP/current-apt.txt" "$TMP/snap-apt.txt" || true
+  fi
+
+  echo
+  echo "===== Flatpak changes ====="
+  if command -v flatpak >/dev/null; then
+    flatpak list --app | awk '{print $1}' | sort > "$TMP/current-flat.txt"
+    awk '{print $1}' "$TMP/system-rebuild/flatpak-apps.txt" | sort > "$TMP/snap-flat.txt"
+    diff "$TMP/current-flat.txt" "$TMP/snap-flat.txt" || true
+  fi
+
+  rm -rf "$TMP"
+}
+
+restore_safe_mode() {
+  SNAP=$(select_snapshot) || return
+
+  clear
+  echo "Previewing restore from:"
+  echo "$SNAP"
+  echo
+  preview_restore "$SNAP"
+
+  CONFIRM_RESTORE=false
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    zenity --question \
+      --title="Restore applications" \
+      --text="Preview complete.\n\nDo you want to restore missing applications from this snapshot?"
+    [ $? -eq 0 ] && CONFIRM_RESTORE=true
+  else
+    read -rp "Restore missing applications (APT + Flatpak)? [y/N]: " CONFIRM
+    [[ "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]] && CONFIRM_RESTORE=true
+  fi
+
+  $CONFIRM_RESTORE || return
+
+  install_missing_apt "$SNAP"
+  install_missing_flatpak "$SNAP"
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    zenity --question \
+      --title="Restore configs?" \
+      --text="Do you want to restore selected application configurations?\n\n(Advanced users only)"
+    [ $? -eq 0 ] && restore_configs "$SNAP"
+  else
+    read -rp "Restore selected configs? [y/N]: " CFG
+    [[ "$CFG" == "y" || "$CFG" == "Y" ]] && restore_configs "$SNAP"
+  fi
+}
+
+
+
+install_missing_apt() {
+  SNAP="$1"
+  TMP=$(mktemp -d)
+
+  tar -xzf "$SNAP" -C "$TMP"
+
+  if ! command -v apt >/dev/null; then
+    echo "APT not available on this system."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  echo "Calculating missing APT packages..."
+
+  apt-mark showmanual | sort > "$TMP/current-apt.txt"
+  sort "$TMP/system-rebuild/apt-manual.txt" > "$TMP/snap-apt.txt"
+
+  MISSING=$(comm -13 "$TMP/current-apt.txt" "$TMP/snap-apt.txt")
+
+  if [ -z "$MISSING" ]; then
+    echo "No missing APT packages to install."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  echo "The following packages will be installed:"
+  echo "$MISSING"
+  echo
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    zenity --question \
+      --title="Confirm APT Restore" \
+      --text="Install missing APT packages from snapshot?\n\n$(echo "$MISSING" | tr '\n' ' ')"
+    [ $? -ne 0 ] && rm -rf "$TMP" && return
+  else
+    read -rp "Proceed with installation? [y/N]: " CONFIRM
+    [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && rm -rf "$TMP" && return
+  fi
+
+  echo "Installing missing APT packages..."
+  sudo apt update
+  sudo apt install -y $MISSING
+
+  rm -rf "$TMP"
+  echo "APT restore completed."
+  pause
+}
+
+install_missing_flatpak() {
+  SNAP="$1"
+
+  if ! command -v flatpak >/dev/null; then
+    echo "Flatpak not available on this system."
+    pause
+    return
+  fi
+
+  TMP=$(mktemp -d)
+  tar -xzf "$SNAP" -C "$TMP"
+
+  SNAP_LIST="$TMP/system-rebuild/flatpak-apps.txt"
+
+  if [ ! -f "$SNAP_LIST" ]; then
+    echo "No Flatpak data found in snapshot."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  echo "Calculating missing Flatpak applications..."
+
+  CURRENT=$(flatpak list --app --columns=application)
+  FOUND=false
+
+  while read -r APP _; do
+    if ! echo "$CURRENT" | grep -qx "$APP"; then
+      FOUND=true
+      echo "Installing Flatpak: $APP"
+      flatpak install -y flathub "$APP"
+    fi
+  done < "$SNAP_LIST"
+
+  $FOUND || echo "No missing Flatpak apps to install."
+
+  rm -rf "$TMP"
+  pause
+}
+
+
+restore_configs() {
+  SNAP="$1"
+  TMP=$(mktemp -d)
+
+  tar -xzf "$SNAP" -C "$TMP"
+
+  CFG_SRC="$TMP/system-rebuild/config"
+  SHARE_SRC="$TMP/system-rebuild/local-share"
+
+  [ ! -d "$CFG_SRC" ] && echo "No config data in snapshot." && rm -rf "$TMP" && pause && return
+
+  # Build list of available config folders
+  AVAILABLE=$(ls -1 "$CFG_SRC")
+
+  if [ -z "$AVAILABLE" ]; then
+    echo "No config folders found in snapshot."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  SELECTED=""
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    SELECTED=$(zenity --list \
+      --title="Select configs to restore" \
+      --text="Choose application configs to restore" \
+      --checklist \
+      --column="Restore" --column="Config Folder" \
+      $(for f in $AVAILABLE; do echo FALSE "$f"; done) \
+      --separator=" ")
+  else
+    echo "Available config folders:"
+    echo "$AVAILABLE"
+    read -rp "Enter folder names to restore (space separated): " SELECTED
+  fi
+
+  [ -z "$SELECTED" ] && rm -rf "$TMP" && return
+
+  BACKUP="$HOME/.config-backup-$(date +%Y%m%d_%H%M%S)"
+  mkdir -p "$BACKUP"
+
+  echo "Backing up existing configs to:"
+  echo "$BACKUP"
+
+  for cfg in $SELECTED; do
+    [ -d "$HOME/.config/$cfg" ] && cp -a "$HOME/.config/$cfg" "$BACKUP/"
+    cp -a "$CFG_SRC/$cfg" "$HOME/.config/"
+  done
+
+  echo "Selected configs restored."
+  rm -rf "$TMP"
+  pause
+}
+
+
+#----------------------------
+#---------------------------
 while true; do
     clear
     echo "=================================="
@@ -202,9 +437,10 @@ while true; do
     echo "3) List installed apps"
     echo "4) Clean old archives"
     echo "5) Verify archives"
-    echo "6) Exit"
+    echo "6) Restore snapshot (safe mode)"
+    echo "7) Exit"
     echo
-    read -rp "Choose an option [1-6]: " CHOICE
+    read -rp "Choose an option [1-7]: " CHOICE
 
     case $CHOICE in
         1) create_snapshot ;;
@@ -212,7 +448,8 @@ while true; do
         3) list_apps ;;
         4) cleanup_snapshots ;;
         5) verify_snapshots ;;
-        6) exit 0 ;;
+        6) restore_safe_mode ;;
+        7) exit 0 ;;
         *) echo "Invalid option"; pause ;;
     esac
 done
