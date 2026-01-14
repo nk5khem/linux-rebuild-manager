@@ -264,6 +264,7 @@ restore_safe_mode() {
 
   install_missing_apt "$SNAP"
   install_missing_flatpak "$SNAP"
+  install_missing_snap "$SNAP"
 
   if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
     zenity --question \
@@ -365,6 +366,67 @@ install_missing_flatpak() {
   $FOUND || echo "No missing Flatpak apps to install."
 
   rm -rf "$TMP"
+  pause
+}
+
+
+install_missing_snap() {
+  SNAP="$1"
+  TMP=$(mktemp -d)
+
+  tar -xzf "$SNAP" -C "$TMP"
+
+  if ! command -v snap >/dev/null; then
+    echo "Snap not available on this system."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  SNAP_FILE="$TMP/system-rebuild/snap-list.txt"
+
+  if [ ! -f "$SNAP_FILE" ]; then
+    echo "No Snap data in snapshot."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  echo "Calculating missing Snap applications..."
+
+  snap list | awk 'NR>1 {print $1}' | sort > "$TMP/current-snap.txt"
+  awk 'NR>1 {print $1}' "$SNAP_FILE" | sort > "$TMP/snap-snap.txt"
+
+  MISSING=$(comm -13 "$TMP/current-snap.txt" "$TMP/snap-snap.txt")
+
+  if [ -z "$MISSING" ]; then
+    echo "No missing Snap apps to install."
+    rm -rf "$TMP"
+    pause
+    return
+  fi
+
+  echo "The following Snap apps will be installed:"
+  echo "$MISSING"
+  echo
+
+  if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+    zenity --question \
+      --title="Confirm Snap Restore" \
+      --text="Install missing Snap applications?\n\n$(echo "$MISSING" | tr '\n' ' ')"
+    [ $? -ne 0 ] && rm -rf "$TMP" && return
+  else
+    read -rp "Install missing Snap apps? [y/N]: " CONFIRM
+    [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && rm -rf "$TMP" && return
+  fi
+
+  for APP in $MISSING; do
+    echo "Installing Snap: $APP"
+    sudo snap install "$APP"
+  done
+
+  rm -rf "$TMP"
+  echo "Snap restore completed."
   pause
 }
 
