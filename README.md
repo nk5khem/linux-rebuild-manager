@@ -17,3 +17,15 @@ and user configurations to rebuild a familiar working environment on a new syste
 - Ubuntu and Ubuntu-based distributions (full support)
 - Debian-based distributions (partial support)
 - Other Linux distributions (Flatpak + configs only)
+## AppImage notes
+
+On some Ubuntu systems with Secure Boot or kernel security restrictions,
+AppImages may not run directly.
+
+If execution is blocked, extract and run manually:
+
+./linux-rebuild-manager_1.0.0_x86_64.AppImage --appimage-extract
+cd squashfs-root
+./AppRun
+
+For Ubuntu users, the .deb package is recommended.
