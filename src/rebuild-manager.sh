@@ -67,15 +67,30 @@ pause() {
 }
 
 # -----------------------------
+# GUI Progress helper
+# -----------------------------
+progress_gui() {
+    PERCENT="$1"
+    MESSAGE="$2"
+
+    if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
+        echo "$PERCENT"
+        echo "# $MESSAGE"
+    fi
+}
+
+# -----------------------------
 # Core functionality
 # -----------------------------
 create_snapshot() {
-    echo "Creating rebuild snapshot..."
+        progress_gui 5 "Preparing snapshot environment"
+        echo "Creating rebuild snapshot..."
 
     rm -rf "$BASE_DIR"
     mkdir -p "$BASE_DIR"
 
     if $HAS_APT; then
+        progress_gui 20 "Saving APT package list"
         echo "Saving APT manual packages..."
         apt-mark showmanual > "$BASE_DIR/apt-manual.txt"
     else
@@ -83,6 +98,7 @@ create_snapshot() {
     fi
 
     if $HAS_SNAP; then
+        progress_gui 35 "Saving Snap package list"
         echo "Saving Snap list..."
         snap list > "$BASE_DIR/snap-list.txt"
     else
@@ -90,6 +106,7 @@ create_snapshot() {
     fi
 
     if $HAS_FLATPAK; then
+        progress_gui 50 "Saving Flatpak applications"
         echo "Saving Flatpak apps..."
         flatpak list --app --columns=application > "$BASE_DIR/flatpak-apps.txt"
     else
@@ -105,14 +122,17 @@ create_snapshot() {
     fi
 
     echo "Saving user configs..."
+    progress_gui 65 "Saving user configuration files"
     cp -r "$HOME/.config" "$BASE_DIR/config" 2>/dev/null
     cp -r "$HOME/.local/share" "$BASE_DIR/local-share" 2>/dev/null
 
+    progress_gui 85 "Creating compressed archive"
     ARCHIVE="$SNAPSHOT_DIR/linux-rebuild-$DATE.tar.gz"
     tar -czf "$ARCHIVE" -C "$HOME" system-rebuild
 
     echo
     echo "Snapshot created:"
+    progress_gui 100 "Snapshot completed"
     echo "$ARCHIVE"
     pause
 }
@@ -247,6 +267,7 @@ restore_safe_mode() {
   echo "$SNAP"
   echo
   preview_restore "$SNAP"
+  progress_gui 10 "Restore preview completed"
 
   CONFIRM_RESTORE=false
 
@@ -261,11 +282,14 @@ restore_safe_mode() {
   fi
 
   $CONFIRM_RESTORE || return
-
+  progress_gui 30 "Restoring APT packages"
   install_missing_apt "$SNAP"
+  progress_gui 55 "Restoring Flatpak applications"
   install_missing_flatpak "$SNAP"
+  progress_gui 75 "Restoring Snap packages"
   install_missing_snap "$SNAP"
 
+  progress_gui 90 "Application restore completed"
   if command -v zenity >/dev/null && [ -n "$DISPLAY" ]; then
     zenity --question \
       --title="Restore configs?" \
@@ -275,6 +299,7 @@ restore_safe_mode() {
     read -rp "Restore selected configs? [y/N]: " CFG
     [[ "$CFG" == "y" || "$CFG" == "Y" ]] && restore_configs "$SNAP"
   fi
+  progress_gui 100 "Restore process completed"
 }
 
 
