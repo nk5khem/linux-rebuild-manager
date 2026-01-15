@@ -1,9 +1,7 @@
-Package: ubuntu-rebuild-manager
-Version: 1.1
+Package: linux-rebuild-manager
+Version: 1.0.2
 Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Navneet
-Description: Menu-based Ubuntu rebuild snapshot and migration tool
- A safe tool to snapshot installed apps, configs,
- and rebuild system identity on new machines.
+Description: CLI-based Linux rebuild and migration utility
