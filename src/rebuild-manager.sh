@@ -160,6 +160,9 @@ select_snapshot() {
 # ============================================================
 # RESTORE FUNCTIONS
 # ============================================================
+
+
+
 install_missing_apt() {
     $HAS_APT || return
     SNAP="$1"
@@ -184,19 +187,70 @@ install_missing_apt() {
 }
 
 install_missing_flatpak() {
-    $HAS_FLATPAK || return
+
     SNAP="$1"
+
+    # -----------------------------
+    # Ensure Flatpak is installed
+    # -----------------------------
+    if ! command -v flatpak >/dev/null 2>&1; then
+        echo "[INFO] Flatpak not found. Installing Flatpak (required for restore)."
+
+        if ! command -v apt >/dev/null 2>&1; then
+            echo "[ERROR] Automatic Flatpak installation is supported only on Debian/Ubuntu."
+            return 1
+        fi
+
+        if [ "$EUID" -ne 0 ]; then
+            echo "[ERROR] Flatpak installation requires root privileges."
+            echo "        Please run the recovery with sudo."
+            return 1
+        fi
+
+        apt update
+        apt install -y flatpak
+    else
+        echo "[INFO] Flatpak is already installed."
+    fi
+
+    # -----------------------------
+    # Ensure Flathub remote exists
+    # -----------------------------
+    if ! flatpak remote-list | awk '{print $1}' | grep -qx flathub; then
+        echo "[INFO] Adding Flathub remote..."
+        flatpak remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+    else
+        echo "[INFO] Flathub remote already configured."
+    fi
+
+    # -----------------------------
+    # Extract snapshot
+    # -----------------------------
     TMP=$(mktemp -d)
     tar -xzf "$SNAP" -C "$TMP"
 
-    LIST="$TMP/system-rebuild/flatpak-apps.txt"
-    [[ ! -f "$LIST" ]] && rm -rf "$TMP" && return
+    # -----------------------------
+    # Locate Flatpak app list (robust)
+    # -----------------------------
+    LIST="$(find "$TMP" -type f -name 'flatpak-apps.txt' 2>/dev/null | head -n 1)"
 
+    if [[ -z "$LIST" ]]; then
+        echo "[INFO] No Flatpak app list found in snapshot. Skipping Flatpak restore."
+        rm -rf "$TMP"
+        return 0
+    fi
+
+    # -----------------------------
+    # Restore Flatpak applications
+    # -----------------------------
     echo "[2/3] Restoring Flatpak applications..."
-    CURRENT=$(flatpak list --app --columns=application)
+
+    CURRENT="$(flatpak list --app --columns=application)"
     FOUND=false
 
     while read -r APP; do
+        [[ -z "$APP" ]] && continue
         if ! echo "$CURRENT" | grep -qx "$APP"; then
             FOUND=true
             echo "Installing Flatpak: $APP"
@@ -205,8 +259,11 @@ install_missing_flatpak() {
     done < "$LIST"
 
     $FOUND || echo "No missing Flatpak apps."
+
     rm -rf "$TMP"
 }
+
+
 
 install_missing_snap() {
     $HAS_SNAP || return
