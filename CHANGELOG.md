@@ -1,3 +1,13 @@
+## [1.0.3] – 2026-01-15
+
+### Fixed
+- Automatic Flatpak installation during restore if missing
+- Flathub remote setup even when Flatpak is already installed
+- Flatpak restore skipping due to snapshot path mismatches
+- DEB package version mismatch with CLI version
+- Improved robustness of Flatpak restore on fresh systems
+
+
 ## v1.0.2
 - Fix Flatpak restore using application IDs instead of display names
 

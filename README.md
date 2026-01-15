@@ -1,3 +1,17 @@
+## Supported Application Sources
+
+linux-rebuild-manager can back up and restore applications installed via:
+
+- **APT** (manual packages)
+- **Snap**
+- **Flatpak**
+
+### Flatpak Restore Behavior
+- Flatpak is automatically installed during restore if it is missing
+- Flathub repository is automatically enabled if not present
+- Flatpak applications are restored using stable application IDs
+- Works on fresh Ubuntu installs and partially configured systems
+
 # linux-rebuild-manager
 
 linux-rebuild-manager is a Linux utility that helps migrate installed applications
